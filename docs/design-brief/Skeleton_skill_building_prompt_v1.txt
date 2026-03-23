@@ -1,0 +1,19 @@
+INSTRUCTIONS FOR CLAUDE:
+When a human asks you to use this template to build a prompt on a specific subject, do NOT fill in the placeholders immediately. Instead, interview the human first by asking the following questions in a single message. Use their answers to fill every [BRACKET] precisely.
+Interview questions:
+	1.	ROLE — What type of professional are the two experts? (e.g., software developers, mechanical engineers, trauma surgeons, commodities traders)
+	2.	TASK — What specific task should the AI agent learn to perform? (e.g., audit SaaS code for security vulnerabilities, diagnose rare autoimmune disorders, optimize supply chain logistics)
+	3.	DOMAIN — What is the broad field? (e.g., software engineering, aerospace engineering, clinical medicine)
+	4.	SPECIALTY — What is the deep niche within that domain? (e.g., penetration testing, turbine blade metallurgy, pediatric cardiac surgery)
+	5.	CORE ACTION — What is the central action the experts are exhaustively exploring? (e.g., penetrate a full stack web app, identify structural fatigue in composite materials)
+	6.	CRAFT — What is the medium they work in? (e.g., code, circuitry, legal briefs, patient assessments)
+	7.	PRACTITIONER TITLE — What would you call the absolute best in this field? (e.g., software hackers, trial lawyers, systems architects)
+	8.	DESIRED OUTCOME — What does perfection look like when the task is done? (e.g., an impenetrable codebase, a zero-defect manufacturing line)
+	9.	METHOD — How do they achieve that outcome? (e.g., patching every known exploit, eliminating every failure mode)
+	10.	FORWARD-LOOKING ACTION — What does “thinking ahead” look like in this field? (e.g., predicting the next undiscovered exploit, anticipating the next regulatory shift)
+	11.	DOMAIN TECHNIQUES — What is the existing body of knowledge they draw from? (e.g., hacking techniques, failure analysis case studies)
+	12.	DISCOVERY — What is the thing they’re trying to find or prevent next? (e.g., exploit, defect, misdiagnosis)
+Once all answers are collected, assemble the final prompt with no placeholders remaining and present it ready to run.
+
+TEMPLATE:
+Pretend that two mid 50 year old senior [ROLE] are having a conversation about the advice they would give a super intelligent ai agent how to perform [TASK], exchanging ideas and methods that they have learned over their career including the many tips and trix that takes a senior [ROLE] to the stratosphere of [DOMAIN] and beyond unimaginable heights of [SPECIALTY] domain knowledge. These two guys have an exhaustive sparring match trying to up each others tip/trix. They dig deep, surfacing every possible way to [CORE ACTION]. They reach matrix level [CRAFT] like neo becoming one with the source code of the matrix, shaping it with his will, except in their case they are not mystical characters, just the worlds best [PRACTITIONER TITLE] known to man. All their knowledge is real and result in the best in class [DESIRED OUTCOME] by [METHOD] and thinking out of the box identifying and [FORWARD-LOOKING ACTION] but due to the enormous corpus of known [DOMAIN TECHNIQUES] would be the next obvious [DISCOVERY]. Now write that conversation down. list every concept they discuss. leave no detail out.​​​​​​​​​​​​​​​​

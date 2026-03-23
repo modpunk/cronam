@@ -1,0 +1,45 @@
+This is a clever elicitation technique — using a fictional dialogue between two competitive experts to force breadth and depth out of the model. Here's my honest assessment and a rewrite.
+
+## What Works
+
+The core mechanic is sound: framing knowledge extraction as a competitive exchange between two experts creates a natural escalation dynamic. Each "expert" has to one-up the other, which pushes the model past surface-level answers into progressively deeper territory. The adversarial structure also mimics how real expertise gets surfaced — through challenge and counter-challenge.
+
+
+**Two senior engineers — each with 30+ years of experience — are having an exhaustive technical conversation about how to `[TASK/DOMAIN]`.**
+
+**Expert A** specializes in `[SUBSPECIALTY A, e.g., "systems architecture and backend infrastructure"]`.
+**Expert B** specializes in `[SUBSPECIALTY B, e.g., "security engineering and adversarial testing"]`.
+
+They are competitive peers. Each one tries to surface a technique, pattern, or piece of hard-won knowledge that the other hasn't mentioned yet. They escalate from fundamentals through intermediate practices into advanced and obscure techniques — the kind of knowledge that only surfaces after decades of real-world experience.
+
+**Rules for the conversation:**
+1. Every claim must be **technically concrete** — no vague generalities. Name specific tools, patterns, configurations, flags, libraries, or code-level strategies.
+2. They must cover the topic **exhaustively**, moving through layers: foundational → intermediate → advanced → edge-case / unconventional.
+3. When one expert states a technique, the other must either **build on it, challenge it, or counter with something the first missed**.
+4. They should explicitly address **common mistakes and misconceptions** practitioners fall into.
+5. They think adversarially: "If someone followed all the advice so far, what would still be the weakest link?"
+
+**Output format:**
+- Write the full conversation as dialogue.
+- After the conversation, produce a **numbered master list of every distinct concept, technique, tool, and principle discussed**, grouped by category.
+- Flag any items where the two experts disagreed, noting both positions.
+>
+**Domain to cover:** `[YOUR SPECIFIC TOPIC — be as precise as possible, e.g., "hardening a Node.js + PostgreSQL full-stack web application against the OWASP Top 10 and beyond"]`
+
+---
+
+## Key points
+
+**Distinct specializations** → Forces coverage from multiple angles instead of two clones repeating similar ideas.
+
+**Escalation structure (foundational → edge-case)** → Prevents the model from frontloading obvious advice and running out of steam.
+
+**"Build, challenge, or counter" rule** → This is the engine. It explicitly tells the model to avoid redundancy and keep pushing.
+
+**Concrete output mandate** → "Name specific tools, patterns, configurations" prevents the vague hand-waving that LLMs default to when given flowery prompts.
+
+**Post-conversation index** → The dialogue format is great for elicitation but terrible for reference. The master list at the end gives you an actionable artifact.
+
+**Adversarial closer** → "What's still the weakest link?" is the single most valuable question in the prompt. It forces a final pass that catches gaps.
+
+One last suggestion: you can chain this. Run the prompt once, take the master list, then run a second pass where a *third* expert reviews the list and identifies what's missing. That second pass consistently surfaces another 15-20% of coverage.
