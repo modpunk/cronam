@@ -1,3 +1,4 @@
+#![deny(unsafe_code)]
 //! Agent runtime and execution environment.
 //!
 //! Manages the agent execution loop, LLM driver abstraction,

@@ -1,3 +1,4 @@
+#![deny(unsafe_code)]
 //! OpenFang Wire Protocol (OFP) — agent-to-agent networking.
 //!
 //! Provides cross-machine agent discovery, authentication, and communication

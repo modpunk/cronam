@@ -1,3 +1,4 @@
+#![deny(unsafe_code)]
 //! OpenFang Hands — curated autonomous capability packages.
 //!
 //! A Hand is a pre-built, domain-complete agent configuration that users activate

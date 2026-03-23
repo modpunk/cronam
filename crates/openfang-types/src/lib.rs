@@ -1,3 +1,4 @@
+#![deny(unsafe_code)]
 //! Core types and traits for the OpenFang Agent Operating System.
 //!
 //! This crate defines all shared data structures used across the OpenFang kernel,
