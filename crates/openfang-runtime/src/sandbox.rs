@@ -241,22 +241,42 @@ impl WasmSandbox {
         let input_bytes = serde_json::to_vec(&input)
             .map_err(|e| SandboxError::Execution(format!("JSON serialize failed: {e}")))?;
 
+        // Phase 1 Quick Win: inline size enforcement (4 MB max input)
+        const MAX_INPUT_SIZE: usize = 4 * 1024 * 1024;
+        if input_bytes.len() > MAX_INPUT_SIZE {
+            return Err(SandboxError::AbiError(format!(
+                "Input too large: {} bytes (max {})",
+                input_bytes.len(),
+                MAX_INPUT_SIZE,
+            )));
+        }
+
+        // Phase 1 Quick Win: 64-bit safe cast (no silent truncation via `as i32`)
+        let input_len_i32: i32 = input_bytes
+            .len()
+            .try_into()
+            .map_err(|_| SandboxError::AbiError("Input size exceeds i32::MAX".into()))?;
+
         // Allocate space in guest memory for input
         let input_ptr = alloc_fn
-            .call(&mut store, input_bytes.len() as i32)
+            .call(&mut store, input_len_i32)
             .map_err(|e| SandboxError::AbiError(format!("alloc call failed: {e}")))?;
 
-        // Write input into guest memory
+        // Write input into guest memory (checked arithmetic)
         let mem_data = memory.data_mut(&mut store);
-        let start = input_ptr as usize;
-        let end = start + input_bytes.len();
+        let start: usize = input_ptr
+            .try_into()
+            .map_err(|_| SandboxError::AbiError("Negative alloc pointer".into()))?;
+        let end = start
+            .checked_add(input_bytes.len())
+            .ok_or_else(|| SandboxError::AbiError("Input pointer + length overflows".into()))?;
         if end > mem_data.len() {
             return Err(SandboxError::AbiError("Input exceeds memory bounds".into()));
         }
         mem_data[start..end].copy_from_slice(&input_bytes);
 
-        // Call guest execute
-        let packed = match execute_fn.call(&mut store, (input_ptr, input_bytes.len() as i32)) {
+        // Call guest execute (safe cast for input_len)
+        let packed = match execute_fn.call(&mut store, (input_ptr, input_len_i32)) {
             Ok(v) => v,
             Err(e) => {
                 // Check for fuel exhaustion via trap code
@@ -278,14 +298,26 @@ impl WasmSandbox {
         let result_ptr = (packed >> 32) as usize;
         let result_len = (packed & 0xFFFF_FFFF) as usize;
 
-        // Read output JSON from guest memory
+        // Phase 1: Output size enforcement (4 MB max)
+        const MAX_OUTPUT_SIZE: usize = 4 * 1024 * 1024;
+        if result_len > MAX_OUTPUT_SIZE {
+            return Err(SandboxError::AbiError(format!(
+                "Output too large: {} bytes (max {})",
+                result_len, MAX_OUTPUT_SIZE,
+            )));
+        }
+
+        // Read output JSON from guest memory (checked arithmetic)
         let mem_data = memory.data(&store);
-        if result_ptr + result_len > mem_data.len() {
+        let result_end = result_ptr
+            .checked_add(result_len)
+            .ok_or_else(|| SandboxError::AbiError("Result pointer + length overflows".into()))?;
+        if result_end > mem_data.len() {
             return Err(SandboxError::AbiError(
                 "Result pointer out of bounds".into(),
             ));
         }
-        let output_bytes = &mem_data[result_ptr..result_ptr + result_len];
+        let output_bytes = &mem_data[result_ptr..result_end];
 
         let output: serde_json::Value = serde_json::from_slice(output_bytes)
             .map_err(|e| SandboxError::AbiError(format!("Invalid JSON output from guest: {e}")))?;
@@ -315,15 +347,21 @@ impl WasmSandbox {
                  request_ptr: i32,
                  request_len: i32|
                  -> Result<i64, anyhow::Error> {
-                    // Read request from guest memory
+                    // Read request from guest memory (safe casts + checked arithmetic)
                     let memory = caller
                         .get_export("memory")
                         .and_then(|e| e.into_memory())
                         .ok_or_else(|| anyhow::anyhow!("no memory export"))?;
 
                     let data = memory.data(&caller);
+                    if request_ptr < 0 || request_len < 0 {
+                        anyhow::bail!("host_call: negative pointer or length");
+                    }
                     let start = request_ptr as usize;
-                    let end = start + request_len as usize;
+                    let len = request_len as usize;
+                    let end = start
+                        .checked_add(len)
+                        .ok_or_else(|| anyhow::anyhow!("host_call: pointer + length overflows"))?;
                     if end > data.len() {
                         anyhow::bail!("host_call: request out of bounds");
                     }
@@ -344,9 +382,12 @@ impl WasmSandbox {
                     // Dispatch to capability-checked handler
                     let response = host_functions::dispatch(caller.data(), &method, &params);
 
-                    // Serialize response JSON
+                    // Serialize response JSON (safe cast)
                     let response_bytes = serde_json::to_vec(&response)?;
-                    let len = response_bytes.len() as i32;
+                    let len: i32 = response_bytes
+                        .len()
+                        .try_into()
+                        .map_err(|_| anyhow::anyhow!("host_call: response exceeds i32::MAX"))?;
 
                     // Allocate space in guest for response
                     let alloc_fn = caller
@@ -356,14 +397,21 @@ impl WasmSandbox {
                     let alloc_typed = alloc_fn.typed::<i32, i32>(&caller)?;
                     let ptr = alloc_typed.call(&mut caller, len)?;
 
-                    // Write response into guest memory
+                    // Write response into guest memory (checked arithmetic)
                     let memory = caller
                         .get_export("memory")
                         .and_then(|e| e.into_memory())
                         .ok_or_else(|| anyhow::anyhow!("no memory export"))?;
                     let mem_data = memory.data_mut(&mut caller);
+                    if ptr < 0 {
+                        anyhow::bail!("host_call: negative alloc pointer");
+                    }
                     let dest_start = ptr as usize;
-                    let dest_end = dest_start + response_bytes.len();
+                    let dest_end = dest_start
+                        .checked_add(response_bytes.len())
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("host_call: response pointer + length overflows")
+                        })?;
                     if dest_end > mem_data.len() {
                         anyhow::bail!("host_call: response exceeds memory bounds");
                     }
@@ -391,8 +439,16 @@ impl WasmSandbox {
                         .ok_or_else(|| anyhow::anyhow!("no memory export"))?;
 
                     let data = memory.data(&caller);
+                    if msg_ptr < 0 || msg_len < 0 {
+                        anyhow::bail!("host_log: negative pointer or length");
+                    }
+                    // Cap log messages at 8 KB to prevent log flooding
+                    const MAX_LOG_MSG: usize = 8 * 1024;
                     let start = msg_ptr as usize;
-                    let end = start + msg_len as usize;
+                    let len = (msg_len as usize).min(MAX_LOG_MSG);
+                    let end = start
+                        .checked_add(len)
+                        .ok_or_else(|| anyhow::anyhow!("host_log: pointer + length overflows"))?;
                     if end > data.len() {
                         anyhow::bail!("host_log: pointer out of bounds");
                     }
