@@ -1,3 +1,4 @@
+#![deny(unsafe_code)]
 //! Channel Bridge Layer for the OpenFang Agent OS.
 //!
 //! Provides 40 pluggable messaging integrations that convert platform messages

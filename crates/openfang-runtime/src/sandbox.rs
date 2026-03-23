@@ -100,11 +100,39 @@ pub struct WasmSandbox {
 }
 
 impl WasmSandbox {
-    /// Create a new sandbox engine with fuel metering enabled.
+    /// Create a new sandbox engine with hardened configuration.
+    ///
+    /// Security hardening (Ralph Layer 14):
+    /// - Fuel metering: deterministic instruction budget
+    /// - Epoch interruption: wall-clock timeout via watchdog
+    /// - Disabled features: threads, SIMD, multi-memory, reference types,
+    ///   bulk memory, tail calls, GC, component model — reduces attack surface
+    ///   and prevents exploitation of Wasmtime feature-specific CVEs
     pub fn new() -> Result<Self, SandboxError> {
         let mut config = Config::new();
+
+        // --- Metering (existing) ---
         config.consume_fuel(true);
         config.epoch_interruption(true);
+
+        // --- Attack surface reduction (Ralph Layer 14) ---
+        // Disable WASM threads — prevents shared-memory side channels
+        config.wasm_threads(false);
+        // Disable SIMD — not needed for tool execution, reduces CVE surface
+        config.wasm_simd(false);
+        // Disable multi-memory — single linear memory is sufficient
+        config.wasm_multi_memory(false);
+        // Disable bulk memory ops — prevents large memcpy-based attacks
+        config.wasm_bulk_memory(false);
+        // Disable reference types — reduces type confusion attack surface
+        config.wasm_reference_types(false);
+        // Disable tail calls — prevents stack manipulation exploits
+        config.wasm_tail_call(false);
+        // Disable component model — we use core WASM only
+        config.wasm_component_model(false);
+        // Disable GC — not needed, reduces complexity
+        config.wasm_gc(false);
+
         let engine = Engine::new(&config).map_err(|e| SandboxError::Compilation(e.to_string()))?;
         Ok(Self { engine })
     }

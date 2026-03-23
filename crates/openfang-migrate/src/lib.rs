@@ -1,3 +1,4 @@
+#![deny(unsafe_code)]
 //! Migration engine for importing from other agent frameworks into OpenFang.
 //!
 //! Supports importing agents, memory, sessions, skills, and channel configs

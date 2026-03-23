@@ -1,3 +1,4 @@
+#![deny(unsafe_code)]
 //! Skill system for OpenFang.
 //!
 //! Skills are pluggable tool bundles that extend agent capabilities.

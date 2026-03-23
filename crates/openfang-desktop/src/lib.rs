@@ -1,3 +1,4 @@
+#![deny(unsafe_code)]
 //! OpenFang Desktop — Native Tauri 2.0 wrapper for the OpenFang Agent OS.
 //!
 //! Boots the kernel + embedded API server, then opens a native window pointing

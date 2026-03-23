@@ -1,3 +1,4 @@
+#![deny(unsafe_code)]
 //! Memory substrate for the OpenFang Agent Operating System.
 //!
 //! Provides a unified memory API over three storage backends:

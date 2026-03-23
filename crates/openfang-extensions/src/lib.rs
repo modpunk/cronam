@@ -1,3 +1,4 @@
+#![deny(unsafe_code)]
 //! OpenFang Extensions — one-click integration system.
 //!
 //! This crate provides:
