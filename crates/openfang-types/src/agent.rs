@@ -301,7 +301,7 @@ pub enum Priority {
 /// - **Full**: All assigned skills loaded at startup (default, ≤5 skills).
 /// - **Selective**: Only named capabilities from each skill (context-efficient).
 /// - **OnDemand**: Skills resolved per-task by keyword matching (minimal startup cost).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "mode")]
 pub enum SkillDeploymentMode {
     /// All skills in the agent's profile are loaded into the system prompt.
