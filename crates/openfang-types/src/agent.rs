@@ -295,6 +295,56 @@ pub enum Priority {
     Critical = 3,
 }
 
+/// How skills are deployed to an agent's context window.
+///
+/// Controls the trade-off between context budget and skill availability:
+/// - **Full**: All assigned skills loaded at startup (default, ≤5 skills).
+/// - **Selective**: Only named capabilities from each skill (context-efficient).
+/// - **OnDemand**: Skills resolved per-task by keyword matching (minimal startup cost).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "mode")]
+pub enum SkillDeploymentMode {
+    /// All skills in the agent's profile are loaded into the system prompt.
+    #[default]
+    Full,
+
+    /// Only specific capabilities from each skill are loaded.
+    Selective {
+        /// Per-skill capability filters.
+        #[serde(default)]
+        filters: Vec<SkillCapabilityFilter>,
+    },
+
+    /// Skills are resolved dynamically per-task by keyword matching.
+    OnDemand {
+        /// Maximum skills to load per task.
+        #[serde(default = "default_max_on_demand")]
+        max_skills_per_task: usize,
+        /// Minimum match score (0.0–1.0) to trigger loading.
+        #[serde(default = "default_match_threshold")]
+        match_threshold: f32,
+    },
+}
+
+fn default_max_on_demand() -> usize {
+    3
+}
+
+fn default_match_threshold() -> f32 {
+    0.3
+}
+
+/// Filter for selective deployment — pick specific capability areas from a skill.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkillCapabilityFilter {
+    /// The skill name to filter.
+    pub skill: String,
+    /// Keywords that must appear in a prompt_context section for it to be included.
+    /// Empty = include the full skill.
+    #[serde(default)]
+    pub capabilities: Vec<String>,
+}
+
 /// Named tool presets — expand to tool lists + derived capabilities.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -456,6 +506,12 @@ pub struct AgentManifest {
     /// Installed skill references (empty = all skills available).
     #[serde(default, deserialize_with = "crate::serde_compat::vec_lenient")]
     pub skills: Vec<String>,
+    /// Skill deployment mode — controls how skills are loaded into context.
+    /// Full (default): all assigned skills at startup.
+    /// Selective: only specified capabilities per skill.
+    /// OnDemand: resolved per-task by keyword matching.
+    #[serde(default)]
+    pub skill_deployment: SkillDeploymentMode,
     /// MCP server allowlist (empty = all connected MCP servers available).
     #[serde(default, deserialize_with = "crate::serde_compat::vec_lenient")]
     pub mcp_servers: Vec<String>,
@@ -514,6 +570,7 @@ impl Default for AgentManifest {
             profile: None,
             tools: HashMap::new(),
             skills: Vec::new(),
+            skill_deployment: SkillDeploymentMode::default(),
             mcp_servers: Vec::new(),
             metadata: HashMap::new(),
             tags: Vec::new(),
@@ -771,6 +828,7 @@ mod tests {
             profile: None,
             tools: HashMap::new(),
             skills: vec![],
+            skill_deployment: SkillDeploymentMode::default(),
             mcp_servers: vec![],
             metadata: HashMap::new(),
             tags: vec!["test".to_string()],
@@ -1299,5 +1357,122 @@ memory_write = ["self.*"]
             manifest.capabilities.memory_write,
             vec!["self.*".to_string()]
         );
+    }
+
+    // ----- SkillDeploymentMode tests -----
+
+    #[test]
+    fn test_skill_deployment_mode_default_is_full() {
+        let mode = SkillDeploymentMode::default();
+        assert_eq!(mode, SkillDeploymentMode::Full);
+    }
+
+    #[test]
+    fn test_skill_deployment_mode_full_serde() {
+        let mode = SkillDeploymentMode::Full;
+        let json = serde_json::to_string(&mode).unwrap();
+        let back: SkillDeploymentMode = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, SkillDeploymentMode::Full);
+    }
+
+    #[test]
+    fn test_skill_deployment_mode_selective_serde() {
+        let mode = SkillDeploymentMode::Selective {
+            filters: vec![SkillCapabilityFilter {
+                skill: "security-audit".to_string(),
+                capabilities: vec!["HIPAA".to_string(), "encryption".to_string()],
+            }],
+        };
+        let json = serde_json::to_string(&mode).unwrap();
+        let back: SkillDeploymentMode = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, mode);
+    }
+
+    #[test]
+    fn test_skill_deployment_mode_on_demand_serde() {
+        let mode = SkillDeploymentMode::OnDemand {
+            max_skills_per_task: 5,
+            match_threshold: 0.25,
+        };
+        let json = serde_json::to_string(&mode).unwrap();
+        let back: SkillDeploymentMode = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, mode);
+    }
+
+    #[test]
+    fn test_skill_deployment_mode_on_demand_defaults() {
+        let json = r#"{"mode":"on_demand"}"#;
+        let mode: SkillDeploymentMode = serde_json::from_str(json).unwrap();
+        match mode {
+            SkillDeploymentMode::OnDemand {
+                max_skills_per_task,
+                match_threshold,
+            } => {
+                assert_eq!(max_skills_per_task, 3);
+                assert!((match_threshold - 0.3).abs() < f32::EPSILON);
+            }
+            _ => panic!("Expected OnDemand"),
+        }
+    }
+
+    #[test]
+    fn test_manifest_skill_deployment_defaults_on_missing() {
+        let json = r#"{"name":"test"}"#;
+        let manifest: AgentManifest = serde_json::from_str(json).unwrap();
+        assert_eq!(manifest.skill_deployment, SkillDeploymentMode::Full);
+    }
+
+    #[test]
+    fn test_manifest_with_selective_deployment_toml() {
+        let toml_str = r#"
+name = "compliance-bot"
+module = "builtin:chat"
+
+[skill_deployment]
+mode = "selective"
+
+[[skill_deployment.filters]]
+skill = "hipaa-compliance"
+capabilities = ["PHI", "encryption"]
+
+[[skill_deployment.filters]]
+skill = "security-audit"
+capabilities = []
+"#;
+        let manifest: AgentManifest = toml::from_str(toml_str).unwrap();
+        match &manifest.skill_deployment {
+            SkillDeploymentMode::Selective { filters } => {
+                assert_eq!(filters.len(), 2);
+                assert_eq!(filters[0].skill, "hipaa-compliance");
+                assert_eq!(filters[0].capabilities, vec!["PHI", "encryption"]);
+                assert_eq!(filters[1].skill, "security-audit");
+                assert!(filters[1].capabilities.is_empty());
+            }
+            _ => panic!("Expected Selective"),
+        }
+    }
+
+    #[test]
+    fn test_manifest_with_on_demand_deployment_toml() {
+        let toml_str = r#"
+name = "versatile-bot"
+module = "builtin:chat"
+
+[skill_deployment]
+mode = "on_demand"
+max_skills_per_task = 5
+match_threshold = 0.2
+"#;
+        let manifest: AgentManifest = toml::from_str(toml_str).unwrap();
+        match &manifest.skill_deployment {
+            SkillDeploymentMode::OnDemand {
+                max_skills_per_task,
+                match_threshold,
+            } => {
+                assert_eq!(*max_skills_per_task, 5);
+                assert!((*match_threshold - 0.2).abs() < f32::EPSILON);
+            }
+            _ => panic!("Expected OnDemand"),
+        }
     }
 }

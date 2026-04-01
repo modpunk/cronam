@@ -169,6 +169,7 @@ impl SetupWizard {
             capabilities: caps,
             tools: HashMap::new(),
             skills: intent.skills.clone(),
+            skill_deployment: openfang_types::agent::SkillDeploymentMode::default(),
             mcp_servers: vec![],
             metadata: HashMap::new(),
             tags: vec![],

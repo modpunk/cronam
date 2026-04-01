@@ -376,6 +376,7 @@ mod tests {
                 profile: None,
                 tools: HashMap::new(),
                 skills: vec![],
+                skill_deployment: openfang_types::agent::SkillDeploymentMode::default(),
                 mcp_servers: vec![],
                 metadata: HashMap::new(),
                 tags: vec![],
