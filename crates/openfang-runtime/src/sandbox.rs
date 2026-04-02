@@ -120,6 +120,8 @@ impl WasmSandbox {
         config.wasm_threads(false);
         // Disable SIMD — not needed for tool execution, reduces CVE surface
         config.wasm_simd(false);
+        // Disable relaxed SIMD — requires SIMD, must be disabled when SIMD is off
+        config.wasm_relaxed_simd(false);
         // Disable multi-memory — single linear memory is sufficient
         config.wasm_multi_memory(false);
         // Disable bulk memory ops — prevents large memcpy-based attacks
