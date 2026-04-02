@@ -1,21 +1,41 @@
 # syntax=docker/dockerfile:1
-FROM rust:1-slim-bookworm AS builder
-WORKDIR /build
+
+# ── Stage 1: Install cargo-chef ──────────────────────────────────────────────
+FROM rust:1-slim-bookworm AS chef
 RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+RUN cargo install cargo-chef --locked
+WORKDIR /build
+
+# ── Stage 2: Prepare recipe (dependency lockfile) ────────────────────────────
+FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY xtask ./xtask
 COPY agents ./agents
 COPY packages ./packages
-# Optional build args for dev environments to speed up compilation
-# Example: docker build --build-arg LTO=false --build-arg CODEGEN_UNITS=16 .
+RUN cargo chef prepare --recipe-path recipe.json
+
+# ── Stage 3: Cook dependencies (CACHED between deploys) ─────────────────────
+FROM chef AS builder
+COPY --from=planner /build/recipe.json recipe.json
+# Build args for optional LTO/codegen tuning
 ARG LTO=true
 ARG CODEGEN_UNITS=1
 ENV CARGO_PROFILE_RELEASE_LTO=${LTO} \
     CARGO_PROFILE_RELEASE_CODEGEN_UNITS=${CODEGEN_UNITS}
+# This layer is cached as long as Cargo.toml/Cargo.lock don't change
+RUN cargo chef cook --release --recipe-path recipe.json
+
+# ── Stage 4: Build application (only YOUR code, ~30s) ───────────────────────
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+COPY xtask ./xtask
+COPY agents ./agents
+COPY packages ./packages
 RUN cargo build --release --bin openfang
 
-FROM rust:1-slim-bookworm
+# ── Stage 5: Runtime image ──────────────────────────────────────────────────
+FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     python3 \
