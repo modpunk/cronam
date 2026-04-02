@@ -23,7 +23,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-venv \
     nodejs \
     npm \
+    chromium \
+    fonts-liberation \
+    libnss3 \
+    libatk-bridge2.0-0 \
+    libdrm2 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libcups2 \
+    libxss1 \
+    libgtk-3-0 \
     && rm -rf /var/lib/apt/lists/*
+
+# Chromium path for OpenFang browser.rs find_chromium()
+ENV CHROME_PATH=/usr/bin/chromium
 
 COPY --from=builder /build/target/release/openfang /usr/local/bin/
 COPY --from=builder /build/agents /opt/openfang/agents
