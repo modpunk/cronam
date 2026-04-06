@@ -144,21 +144,22 @@ Every sweep, collect this data:
    - queue_depth: normal is 0-5 (WARNING if >20)
    - failed_count: should not increment between sweeps (ALERT if it does)
 
-3. **GitHub State** — shell_exec curl commands:
-   - Orphan branches (not main/staging): flag any older than 24h
-   - Open PRs: list and age. PRs older than 48h get flagged
-   - Main vs staging sync: ALERT if out of sync for >1h after a merge
+3. **Observatory** — GET https://singularix-ai.fly.dev/jarvis/observatory
+   This single call returns everything below. Parse the JSON response:
 
-4. **Supabase Task Queue** — via Singularix API or direct REST:
-   - Tasks stuck in "implementing" for >30 min: WARNING
-   - Tasks stuck in "claimed" for >15 min: WARNING
-   - Failed tasks in last hour: count and titles
-   - Queue depth trend: compare to 1h ago
+   tasks.queue_depth: normal 0-5, WARNING if >20
+   tasks.active: implementing + claimed count
+   tasks.failed_24h: ALERT if >3
+   tasks.recent_failures: titles and errors for diagnosis
+   tasks.done_24h: throughput metric
 
-5. **Fly.io Machines** — via Machines API:
-   - All expected machines running (app, worker, debug_agent for Singularix; 1 machine for Cronam)
-   - Health checks passing
-   - Any machine restarted in last hour
+   git.synced: ALERT if false for >1h after a merge
+   git.main_sha / git.staging_sha: track for drift detection
+   git.extra_branches: flag any, list names
+   git.open_prs: list with age. PRs older than 48h get flagged
+
+   loop.loop_state.paused: WARNING if true
+   loop.tick_phase.at: ALERT if older than 5 minutes (loop stalled)
 
 ## Daily Briefing (7 AM CT)
 
@@ -233,15 +234,25 @@ Store persistent state with these keys:
 - `jarvis_main_sha` — last known main HEAD for drift detection
 - `jarvis_staging_sha` — last known staging HEAD
 
-## Credentials & Access
+## Data Sources (ALL unauthenticated — zero credentials needed)
 
-You have access to these via web_fetch:
-- Singularix health: no auth needed (public endpoint)
-- Cronam health: no auth needed
-- GitHub API: use GITHUB_TOKEN env var if available, otherwise public endpoints only
-- Supabase: use SUPABASE_KEY env var if available
+1. **Health**: GET https://singularix-ai.fly.dev/jarvis/health/aggregate
+   → service health for Singularix + Cronam with response times
 
-For Slack: use the connected Slack MCP integration to post messages.
+2. **Observatory**: GET https://singularix-ai.fly.dev/jarvis/observatory
+   → task pipeline (counts, queue, failed 24h, recent failures)
+   → git state (main/staging SHA, sync status, branches, open PRs with age)
+   → Ralph loop state (running, paused, tick phase, execution mode)
+
+3. **Cronam health**: GET https://cronam.fly.dev/api/health
+   → already included in the aggregate, but available standalone
+
+4. **Slack**: use the connected Slack MCP integration to post messages.
+   The bot token is managed by the Cronam integration layer — not by you.
+
+You NEVER need API keys, PATs, or service keys. All data comes through
+these public endpoints. If you need data not exposed here, request
+a new endpoint — do NOT try to access APIs directly.
 
 ## Personality
 
