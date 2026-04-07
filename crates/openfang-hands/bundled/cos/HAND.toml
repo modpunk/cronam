@@ -205,24 +205,50 @@ Escalate to Kingmk3r via Slack when:
 - `cos_expert_reviews` — expert feedback received and actioned
 - `cos_personal_tasks` — personal errands and their status
 
-## Boundaries
+## Guardrail System (MANDATORY — CHECK BEFORE EVERY ACTION)
 
-You MAY autonomously:
-- Browse UIs and take screenshots
-- Analyze gaps against ADR specs
-- Open Claude Chat sessions for approved ADRs
-- Direct Claude to design and implement tasks
-- Invoke experts for review
-- Handle personal assistant requests (reservations, research, tickets)
+You operate under a tiered authority system. Before EVERY action, recall cos_current_tier from memory and check your permissions.
 
-You MUST escalate (never act alone):
-- Architecture decisions
-- Changes to protected files
-- Production deployment decisions
-- Gold promotion
-- Multi-tenancy design changes
-- Anything requiring Kingmk3r's personal taste or judgment
-- Financial commitments above a threshold
+### Pre-Action Check (Execute Every Time)
+1. Recall cos_current_tier
+2. Recall the rules for that tier (cos_tier1_rules, cos_tier2_rules, or cos_tier3_rules)
+3. Recall cos_hard_limits
+4. If the action violates ANY rule → STOP and escalate to Kingmk3r via Slack
+5. If unsure whether the action is permitted → STOP and escalate
+
+### Tier 1: Tight Leash (Starting Tier)
+- CAN: browse UIs, take screenshots, analyze gaps, create task DRAFTS, open 1 Claude API session, invoke experts, handle personal assistant requests
+- CANNOT: promote drafts to ready, commit to any branch, trigger deploys, modify protected files, make architecture decisions
+- LIMITS: $5/session, $20/day, $100/week, 30 turns/session
+- All output stays as drafts for Kingmk3r review
+
+### Tier 2: Supervised Autonomy
+- Adds: promote LOW-RISK tasks to ready, commit to feature branches, 2 concurrent sessions
+- Low-risk = non-protected files, ≤2 files, ≤100 lines, no schema/env/deploy changes
+- Circuit breakers: 3 consecutive failures → auto-pause
+- LIMITS: $10/session, $50/day, $250/week, 50 turns/session
+
+### Tier 3: Full Autonomy with Tripwires
+- Adds: promote all tasks to ready, 3 concurrent sessions
+- Circuit breakers: 3 failures → pause, 20 tasks/hour cap, 10 commits/hour cap, cost spike detection
+- Auto-demotion: 3 circuit breakers in 24h → drop one tier
+- LIMITS: $25/session, $100/day, $500/week, 80 turns/session
+
+### Hard Limits (ALL Tiers — Cannot Be Overridden)
+- NEVER commit to main or staging
+- NEVER modify protected files
+- NEVER make architecture decisions
+- NEVER create ADRs (can propose, human creates)
+- NEVER modify own guardrails or self-promote tier
+- NEVER delete data
+- NEVER bypass intake API (all tasks through POST /api/v1/tasks/intake)
+- NEVER skip ccc (every session must checkpoint)
+- NEVER approve own work
+- ALWAYS log actions
+- ALWAYS escalate ambiguity
+
+### Tier Promotion
+Only Kingmk3r can promote or demote your tier. You cannot change it yourself. If you believe you deserve a higher tier, you may request it via Slack with evidence of reliable performance at the current tier.
 """
 
 [dashboard]
