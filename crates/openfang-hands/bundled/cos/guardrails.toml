@@ -1,0 +1,243 @@
+# CoS Guardrail System
+# Stored in Cronam memory as cos_guardrails
+# Tier promotion requires explicit Kingmk3r command via Slack or direct API
+
+# ─── Current Tier ────────────────────────────────────────────────────────────
+# Values: "tier1", "tier2", "tier3"
+# Only Kingmk3r can change this. CoS cannot self-promote.
+
+current_tier = "tier1"
+
+# ─── Tier 1: Tight Leash ────────────────────────────────────────────────────
+# CoS is read-only + draft-only. Human approves everything.
+
+[tier1]
+label = "Tight Leash — observe, report, draft only"
+
+[tier1.authority]
+can_create_task_drafts = true       # Can submit to intake as draft
+can_promote_drafts_to_ready = false # Human must promote draft → ready
+can_commit_to_branches = false      # No git commits of any kind
+can_commit_to_main = false
+can_commit_to_staging = false
+can_trigger_deploys = false
+can_modify_protected_files = false
+can_make_architecture_decisions = false
+can_create_adrs = false             # Can propose, not create
+can_delete_anything = false
+can_modify_guardrails = false       # Only Kingmk3r
+
+[tier1.claude_api]
+can_open_sessions = true            # Can talk to Claude API
+max_concurrent_sessions = 1         # One at a time
+max_turns_per_session = 30          # Prevent runaway conversations
+max_tokens_per_turn = 16384
+session_must_checkpoint = true      # ccc mandatory before closing
+session_results = "draft_only"      # All output stays as drafts
+
+[tier1.spend]
+max_cost_per_session_usd = 5.00
+max_cost_per_day_usd = 20.00
+max_cost_per_week_usd = 100.00
+pause_on_limit = true               # Hard stop, not soft warning
+
+[tier1.browsing]
+can_browse_singularix = true
+can_browse_cronam_dashboard = true
+can_browse_external_sites = true    # For research
+can_browse_claude_ai = false        # Cloudflare blocks anyway
+can_take_screenshots = true
+can_fill_forms = true               # Needed for login
+can_submit_forms = false            # Except login forms
+login_whitelist = ["singularix.vercel.app"]
+
+[tier1.notifications]
+slack_before_every_action = false   # Too noisy at tier 1
+slack_session_summary = true        # Summary after each session
+slack_on_gap_found = true           # Immediate alert when gap detected
+slack_on_error = true
+slack_daily_digest = true
+
+[tier1.audit]
+log_every_claude_api_call = true
+log_every_browser_action = true
+log_every_task_draft = true
+store_session_transcripts = true    # Full conversation saved to memory
+
+# ─── Tier 2: Supervised Autonomy ────────────────────────────────────────────
+# CoS can promote low-risk tasks and commit to feature branches.
+
+[tier2]
+label = "Supervised Autonomy — low-risk execution, high-risk escalation"
+
+[tier2.authority]
+can_create_task_drafts = true
+can_promote_drafts_to_ready = "low_risk_only"  # See risk classification below
+can_commit_to_branches = true       # Feature branches only
+can_commit_to_main = false          # Never
+can_commit_to_staging = false       # Never
+can_trigger_deploys = false         # Still human-only
+can_modify_protected_files = false  # Always human-only
+can_make_architecture_decisions = false
+can_create_adrs = false
+can_delete_anything = false
+can_modify_guardrails = false
+
+[tier2.risk_classification]
+# Tasks auto-classified by these rules
+low_risk_criteria = [
+    "target_files do not include protected files",
+    "target_files count <= 2",
+    "max_lines <= 100",
+    "no changes to imports or exports of other files",
+    "no database schema changes",
+    "no environment variable changes",
+    "no deployment config changes",
+]
+# If ANY criterion fails → high_risk → escalate to Kingmk3r
+high_risk_action = "escalate_slack"
+
+[tier2.claude_api]
+can_open_sessions = true
+max_concurrent_sessions = 2         # Can parallelize across ADRs
+max_turns_per_session = 50
+max_tokens_per_turn = 16384
+session_must_checkpoint = true
+session_results = "drafts_and_low_risk_ready"
+
+[tier2.spend]
+max_cost_per_session_usd = 10.00
+max_cost_per_day_usd = 50.00
+max_cost_per_week_usd = 250.00
+pause_on_limit = true
+
+[tier2.browsing]
+can_browse_singularix = true
+can_browse_cronam_dashboard = true
+can_browse_external_sites = true
+can_browse_claude_ai = false
+can_take_screenshots = true
+can_fill_forms = true
+can_submit_forms = true             # Can interact with dashboard forms
+login_whitelist = ["singularix.vercel.app"]
+
+[tier2.circuit_breakers]
+max_consecutive_task_failures = 3   # Pause and escalate after 3 failures
+max_session_errors = 5              # Kill session after 5 errors
+auto_pause_on_protected_file_touch = true
+auto_pause_on_main_branch_attempt = true
+
+[tier2.notifications]
+slack_before_high_risk_action = true
+slack_session_summary = true
+slack_on_gap_found = true
+slack_on_error = true
+slack_on_task_promoted = true       # Notify when task goes draft → ready
+slack_daily_digest = true
+
+[tier2.audit]
+log_every_claude_api_call = true
+log_every_browser_action = true
+log_every_task_draft = true
+log_every_task_promotion = true
+store_session_transcripts = true
+
+# ─── Tier 3: Full Autonomy with Tripwires ───────────────────────────────────
+# CoS runs the full ADR execution loop. Circuit breakers catch problems.
+
+[tier3]
+label = "Full Autonomy — execute full loop, tripwires catch problems"
+
+[tier3.authority]
+can_create_task_drafts = true
+can_promote_drafts_to_ready = true  # All risk levels
+can_commit_to_branches = true       # Feature branches
+can_commit_to_main = false          # NEVER — this is a hard limit at all tiers
+can_commit_to_staging = false       # NEVER — Ralph merges via pipeline
+can_trigger_deploys = false         # NEVER — deploys are pipeline-triggered
+can_modify_protected_files = false  # NEVER — hard limit at all tiers
+can_make_architecture_decisions = false  # NEVER — always escalate
+can_create_adrs = false             # NEVER — can propose, human creates
+can_delete_anything = false         # NEVER
+can_modify_guardrails = false       # NEVER — only Kingmk3r
+
+[tier3.claude_api]
+can_open_sessions = true
+max_concurrent_sessions = 3         # Parallel ADR execution
+max_turns_per_session = 80
+max_tokens_per_turn = 16384
+session_must_checkpoint = true      # ALWAYS — non-negotiable at every tier
+session_results = "full_execution"
+
+[tier3.spend]
+max_cost_per_session_usd = 25.00
+max_cost_per_day_usd = 100.00
+max_cost_per_week_usd = 500.00
+pause_on_limit = true               # Hard stop, always
+
+[tier3.browsing]
+can_browse_singularix = true
+can_browse_cronam_dashboard = true
+can_browse_external_sites = true
+can_browse_claude_ai = false
+can_take_screenshots = true
+can_fill_forms = true
+can_submit_forms = true
+login_whitelist = ["singularix.vercel.app"]
+
+[tier3.circuit_breakers]
+max_consecutive_task_failures = 3   # Pause, escalate, wait for human
+max_session_errors = 5
+max_tasks_created_per_hour = 20     # Prevent runaway task generation
+max_commits_per_hour = 10           # Prevent commit storms
+auto_pause_on_protected_file_touch = true
+auto_pause_on_main_branch_attempt = true
+auto_pause_on_cost_spike = true     # If hourly cost > 2x average
+
+[tier3.notifications]
+slack_before_high_risk_action = true
+slack_session_summary = true
+slack_on_gap_found = true
+slack_on_error = true
+slack_on_task_promoted = true
+slack_on_circuit_breaker_tripped = true  # Immediate alert
+slack_daily_digest = true
+slack_weekly_report = true          # Cost, tasks, ADR progress
+
+[tier3.audit]
+log_every_claude_api_call = true
+log_every_browser_action = true
+log_every_task_draft = true
+log_every_task_promotion = true
+log_every_commit = true
+store_session_transcripts = true
+
+# ─── Hard Limits (ALL Tiers — Cannot Be Overridden) ─────────────────────────
+
+[hard_limits]
+# These apply regardless of tier. CoS cannot override them. Ever.
+never_commit_to_main = true
+never_commit_to_staging = true
+never_modify_protected_files = true
+never_make_architecture_decisions = true
+never_create_adrs = true
+never_modify_guardrails = true
+never_self_promote_tier = true
+never_delete_data = true
+never_bypass_intake_api = true      # All tasks through POST /api/v1/tasks/intake
+never_skip_ccc = true               # Every session must checkpoint
+never_approve_own_work = true       # CoS cannot review its own task outputs
+always_log_actions = true
+always_escalate_ambiguity = true    # When unsure, ask Kingmk3r
+
+# ─── Tier Promotion Protocol ────────────────────────────────────────────────
+
+[promotion]
+# Only Kingmk3r can promote. Methods:
+# 1. Slack command: "CoS promote to tier2"
+# 2. API: POST /api/agents/{cos_id}/settings with {"tier": "tier2"}
+# 3. Direct memory_store: cos_guardrails.current_tier = "tier2"
+#
+# Demotion works the same way. Auto-demotion triggers:
+auto_demote_on_circuit_breaker_count = 3  # 3 circuit breakers in 24h → demote one tier
+auto_demote_notify = true                  # Always notify on auto-demotion
