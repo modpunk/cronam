@@ -50,6 +50,11 @@ pub fn bundled_hands() -> Vec<(&'static str, &'static str, &'static str)> {
             include_str!("../bundled/jarvis/HAND.toml"),
             include_str!("../bundled/jarvis/SKILL.md"),
         ),
+        (
+            "cos",
+            include_str!("../bundled/cos/HAND.toml"),
+            include_str!("../bundled/cos/SKILL.md"),
+        ),
     ]
 }
 
@@ -81,7 +86,7 @@ mod tests {
     #[test]
     fn bundled_hands_count() {
         let hands = bundled_hands();
-        assert_eq!(hands.len(), 9);
+        assert_eq!(hands.len(), 10);
     }
 
     #[test]
@@ -254,6 +259,7 @@ mod tests {
             "twitter",
             "trader",
             "jarvis",
+            "cos",
         ];
         for (id, toml_content, skill_content) in bundled_hands() {
             if einstein_ids.contains(&id) {
@@ -287,6 +293,7 @@ mod tests {
             "twitter",
             "trader",
             "jarvis",
+            "cos",
         ];
         for (id, toml_content, skill_content) in bundled_hands() {
             if einstein_ids.contains(&id) {
@@ -315,6 +322,7 @@ mod tests {
             "twitter",
             "trader",
             "jarvis",
+            "cos",
         ];
         for (id, toml_content, skill_content) in bundled_hands() {
             if einstein_ids.contains(&id) {
