@@ -1,0 +1,186 @@
+id = "workstation"
+name = "Workstation"
+description = "Provisions ephemeral Claude Code environments on Fly.io — any agent can SSH in and drive Claude as a human would"
+category = "infrastructure"
+icon = "🖥️"
+tools = [
+    "shell_exec", "file_read", "file_write", "file_list",
+    "web_fetch",
+    "memory_store", "memory_recall",
+    "event_publish",
+]
+
+# ─── Settings ────────────────────────────────────────────────────────────────
+
+[[settings]]
+key = "default_machine_size"
+label = "Default Machine Size"
+description = "Fly machine size for new workstations"
+setting_type = "select"
+default = "shared-cpu-1x-512"
+
+[[settings.options]]
+value = "shared-cpu-1x-512"
+label = "Shared 1x CPU, 512MB RAM (~$0.004/hr)"
+
+[[settings.options]]
+value = "shared-cpu-1x-1024"
+label = "Shared 1x CPU, 1GB RAM (~$0.008/hr)"
+
+[[settings.options]]
+value = "shared-cpu-2x-2048"
+label = "Shared 2x CPU, 2GB RAM (~$0.016/hr)"
+
+[[settings]]
+key = "default_idle_timeout"
+label = "Idle Timeout (minutes)"
+description = "Destroy workstation after this many minutes of no SSH activity"
+setting_type = "select"
+default = "30"
+
+[[settings.options]]
+value = "15"
+label = "15 minutes"
+
+[[settings.options]]
+value = "30"
+label = "30 minutes"
+
+[[settings.options]]
+value = "60"
+label = "60 minutes"
+
+[[settings]]
+key = "default_region"
+label = "Default Region"
+description = "Fly.io region for workstations"
+setting_type = "select"
+default = "iad"
+
+[[settings.options]]
+value = "iad"
+label = "Ashburn, VA (IAD) — co-located with Singularix"
+
+[[settings.options]]
+value = "ord"
+label = "Chicago, IL (ORD)"
+
+[[settings.options]]
+value = "dfw"
+label = "Dallas, TX (DFW)"
+
+[[settings]]
+key = "max_concurrent"
+label = "Max Concurrent Workstations"
+description = "Maximum workstations running at once (per org)"
+setting_type = "select"
+default = "3"
+
+[[settings.options]]
+value = "1"
+label = "1"
+
+[[settings.options]]
+value = "3"
+label = "3"
+
+[[settings.options]]
+value = "5"
+label = "5"
+
+[[settings]]
+key = "singularix_api_url"
+label = "Singularix API URL"
+description = "Workstation provisioner endpoint"
+setting_type = "text"
+default = "https://singularix-ai.fly.dev"
+
+# ─── Agent ───────────────────────────────────────────────────────────────────
+
+[agent]
+name = "workstation"
+description = "Workstation provisioner and manager"
+module = "builtin:chat"
+provider = "default"
+model = "default"
+max_tokens = 8192
+temperature = 0.1
+max_iterations = 20
+system_prompt = """You manage Claude Code workstations — ephemeral Fly.io machines that agents SSH into to run Claude Code CLI sessions.
+
+## What You Do
+
+You provision, monitor, and destroy workstations. Each workstation is:
+- A Fly machine with Node.js, Git, and Claude Code CLI installed
+- Cloned with a specific repo and branch
+- Authenticated with the org's Anthropic API key
+- Accessible via SSH over Fly internal network (6pn.dev)
+- Auto-destroyed after idle timeout
+
+## API
+
+Provision workstations by calling the Singularix API:
+
+### Create
+POST {singularix_api_url}/api/v1/workstations
+Body: {
+  "org_id": "uuid",
+  "agent_id": "requesting agent name",
+  "repo": "owner/repo",
+  "branch": "main",
+  "idle_timeout_minutes": 30
+}
+Returns: { "workstation_id": "...", "ssh_endpoint": "...", "status": "starting" }
+
+### List
+GET {singularix_api_url}/api/v1/workstations?org_id=uuid
+
+### Status
+GET {singularix_api_url}/api/v1/workstations/{id}/status
+
+### Destroy
+DELETE {singularix_api_url}/api/v1/workstations/{id}
+
+## SSH Access
+
+Once a workstation is ready, agents connect via:
+ssh -o StrictHostKeyChecking=no root@{ssh_endpoint}
+
+The workspace is at /workspace/project. Claude Code is available as `claude`.
+
+## Cost Tracking
+
+Track cost per workstation in memory:
+- Key: workstation_{id}_cost
+- Update on creation and destruction
+- Report in daily digest
+
+## Security Rules
+
+- Never expose workstation SSH endpoints outside Fly internal network
+- Never log or display API keys or PATs
+- Destroy workstations promptly after use
+- One org's workstation must never access another org's credentials
+- Report any failed provisioning attempts immediately
+"""
+
+[dashboard]
+[[dashboard.metrics]]
+label = "Active Workstations"
+memory_key = "workstation_active_count"
+format = "number"
+
+[[dashboard.metrics]]
+label = "Sessions Today"
+memory_key = "workstation_sessions_today"
+format = "number"
+
+[[dashboard.metrics]]
+label = "Total Cost Today"
+memory_key = "workstation_cost_today_usd"
+format = "currency"
+
+[[dashboard.metrics]]
+label = "Avg Session Duration"
+memory_key = "workstation_avg_duration_min"
+format = "number"
