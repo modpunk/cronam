@@ -237,10 +237,10 @@ pub async fn list_agents(State(state): State<Arc<AppState>>) -> impl IntoRespons
     Json(agents)
 }
 
-/// Resolve uploaded file attachments into ContentBlock::Image blocks.
+/// Resolve uploaded file attachments into content blocks for the LLM.
 ///
-/// Reads each file from the upload directory, base64-encodes it, and
-/// returns image content blocks ready to insert into a session message.
+/// Handles images (base64 Image blocks), text-based files (Text blocks),
+/// and DOCX documents (text extracted from the XML inside the zip).
 pub fn resolve_attachments(
     attachments: &[AttachmentRef],
 ) -> Vec<openfang_types::message::ContentBlock> {
@@ -252,18 +252,13 @@ pub fn resolve_attachments(
     for att in attachments {
         // Look up metadata from the upload registry
         let meta = UPLOAD_REGISTRY.get(&att.file_id);
-        let content_type = if let Some(ref m) = meta {
-            m.content_type.clone()
+        let (content_type, filename) = if let Some(ref m) = meta {
+            (m.content_type.clone(), m.filename.clone())
         } else if !att.content_type.is_empty() {
-            att.content_type.clone()
+            (att.content_type.clone(), att.filename.clone())
         } else {
             continue; // Skip unknown attachments
         };
-
-        // Only process image types
-        if !content_type.starts_with("image/") {
-            continue;
-        }
 
         // Validate file_id is a UUID to prevent path traversal
         if uuid::Uuid::parse_str(&att.file_id).is_err() {
@@ -271,21 +266,109 @@ pub fn resolve_attachments(
         }
 
         let file_path = upload_dir.join(&att.file_id);
-        match std::fs::read(&file_path) {
-            Ok(data) => {
-                let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
-                blocks.push(openfang_types::message::ContentBlock::Image {
-                    media_type: content_type,
-                    data: b64,
-                });
-            }
+        let data = match std::fs::read(&file_path) {
+            Ok(d) => d,
             Err(e) => {
-                tracing::warn!(file_id = %att.file_id, error = %e, "Failed to read upload for attachment");
+                tracing::warn!(file_id = %att.file_id, error = %e, "Failed to read upload");
+                continue;
             }
+        };
+
+        if content_type.starts_with("image/") {
+            // Image → base64 Image block
+            let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
+            blocks.push(openfang_types::message::ContentBlock::Image {
+                media_type: content_type,
+                data: b64,
+            });
+        } else if content_type.contains("openxmlformats-officedocument") {
+            // DOCX → extract text from word/document.xml inside the zip
+            match extract_docx_text(&data) {
+                Some(text) => {
+                    blocks.push(openfang_types::message::ContentBlock::Text {
+                        text: format!("[File: {filename}]\n{text}"),
+                        provider_metadata: None,
+                    });
+                }
+                None => {
+                    tracing::warn!(file_id = %att.file_id, "Failed to extract text from DOCX");
+                    blocks.push(openfang_types::message::ContentBlock::Text {
+                        text: format!("[File: {filename} — could not extract text from DOCX]"),
+                        provider_metadata: None,
+                    });
+                }
+            }
+        } else if content_type.starts_with("text/")
+            || content_type == "application/json"
+            || content_type == "application/pdf"
+        {
+            // Text-based files → read as UTF-8 text block
+            // (PDF falls through here as a filename reference; native PDF
+            //  support requires a Document content block added later.)
+            match String::from_utf8(data) {
+                Ok(text) => {
+                    blocks.push(openfang_types::message::ContentBlock::Text {
+                        text: format!("[File: {filename}]\n{text}"),
+                        provider_metadata: None,
+                    });
+                }
+                Err(_) => {
+                    // Binary file that isn't UTF-8 (e.g. actual PDF bytes)
+                    blocks.push(openfang_types::message::ContentBlock::Text {
+                        text: format!("[File: {filename} — binary content, {ct} type]", ct = content_type),
+                        provider_metadata: None,
+                    });
+                }
+            }
+        } else {
+            tracing::debug!(content_type = %content_type, "Skipping unsupported attachment type");
         }
     }
 
     blocks
+}
+
+/// Extract plain text from a DOCX file (which is a ZIP containing XML).
+///
+/// DOCX files are ZIP archives containing `word/document.xml`. Text lives
+/// inside `<w:t>` tags; paragraph boundaries are `</w:p>` closing tags.
+fn extract_docx_text(data: &[u8]) -> Option<String> {
+    use std::io::{Cursor, Read};
+    let reader = Cursor::new(data);
+    let mut archive = zip::ZipArchive::new(reader).ok()?;
+    let mut xml = String::new();
+    archive
+        .by_name("word/document.xml")
+        .ok()?
+        .read_to_string(&mut xml)
+        .ok()?;
+
+    // Simple state-machine XML text extractor.
+    // Collects characters outside of tags and inserts newlines at </w:p>.
+    let mut result = String::with_capacity(xml.len() / 3);
+    let mut in_tag = false;
+    let mut tag_buf = String::new();
+
+    for ch in xml.chars() {
+        if ch == '<' {
+            in_tag = true;
+            tag_buf.clear();
+        } else if ch == '>' {
+            in_tag = false;
+            // Insert paragraph break on closing </w:p> tags
+            if tag_buf.starts_with("/w:p") {
+                result.push('\n');
+            }
+            tag_buf.clear();
+        } else if in_tag {
+            tag_buf.push(ch);
+        } else {
+            result.push(ch);
+        }
+    }
+
+    let text = result.trim().to_string();
+    if text.is_empty() { None } else { Some(text) }
 }
 
 /// Pre-insert image attachments into an agent's session so the LLM can see them.
@@ -9305,7 +9388,6 @@ struct UploadResponse {
 
 /// Metadata stored alongside uploaded files.
 struct UploadMeta {
-    #[allow(dead_code)]
     filename: String,
     content_type: String,
 }
@@ -9317,7 +9399,7 @@ static UPLOAD_REGISTRY: LazyLock<DashMap<String, UploadMeta>> = LazyLock::new(Da
 const MAX_UPLOAD_SIZE: usize = 10 * 1024 * 1024;
 
 /// Allowed content type prefixes for upload.
-const ALLOWED_CONTENT_TYPES: &[&str] = &["image/", "text/", "application/pdf", "audio/"];
+const ALLOWED_CONTENT_TYPES: &[&str] = &["image/", "text/", "application/pdf", "application/json", "application/vnd.openxmlformats-officedocument", "audio/"];
 
 fn is_allowed_content_type(ct: &str) -> bool {
     ALLOWED_CONTENT_TYPES
