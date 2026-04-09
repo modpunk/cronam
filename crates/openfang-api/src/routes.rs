@@ -1592,9 +1592,10 @@ const CHANNEL_REGISTRY: &[ChannelMeta] = &[
             ChannelField { key: "bot_token_env", label: "Bot Token (xoxb-)", field_type: FieldType::Secret, env_var: Some("SLACK_BOT_TOKEN"), required: true, placeholder: "xoxb-...", advanced: false },
             ChannelField { key: "allowed_channels", label: "Allowed Channel IDs", field_type: FieldType::List, env_var: None, required: false, placeholder: "C01234, C56789", advanced: true },
             ChannelField { key: "default_agent", label: "Default Agent", field_type: FieldType::Text, env_var: None, required: false, placeholder: "assistant", advanced: true },
+            ChannelField { key: "group_policy", label: "Group Message Policy", field_type: FieldType::Text, env_var: None, required: false, placeholder: "all", advanced: true },
         ],
         setup_steps: &["Create app at api.slack.com/apps", "Enable Socket Mode and copy App Token", "Copy Bot Token from OAuth & Permissions"],
-        config_template: "[channels.slack]\napp_token_env = \"SLACK_APP_TOKEN\"\nbot_token_env = \"SLACK_BOT_TOKEN\"",
+        config_template: "[channels.slack]\napp_token_env = \"SLACK_APP_TOKEN\"\nbot_token_env = \"SLACK_BOT_TOKEN\"\n\n[channels.slack.overrides]\ngroup_policy = \"all\"",
     },
     ChannelMeta {
         name: "whatsapp", display_name: "WhatsApp", icon: "WA",
@@ -7877,8 +7878,15 @@ fn upsert_channel_config(
         .and_then(|v| v.as_table_mut())
         .ok_or("channels is not a table")?;
 
-    // Build channel sub-table with correct TOML types
-    let mut ch_table = toml::map::Map::new();
+    // Build channel sub-table, preserving existing sub-tables (e.g. overrides)
+    let mut ch_table = if let Some(existing) = channels_table
+        .get(channel_name)
+        .and_then(|v| v.as_table())
+    {
+        existing.clone()
+    } else {
+        toml::map::Map::new()
+    };
     for (k, (v, ft)) in fields {
         let toml_val = match ft {
             FieldType::Number => {
