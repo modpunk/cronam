@@ -2,7 +2,10 @@
 
 # ── Stage 1: Install cargo-chef ──────────────────────────────────────────────
 FROM rust:1-slim-bookworm AS chef
-RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    pkg-config libssl-dev \
+    libglib2.0-dev libgobject-2.0-dev \
+    && rm -rf /var/lib/apt/lists/*
 RUN cargo install cargo-chef --locked
 WORKDIR /build
 
@@ -58,6 +61,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcups2 \
     libxss1 \
     libgtk-3-0 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Chromium path for OpenFang browser.rs find_chromium()
