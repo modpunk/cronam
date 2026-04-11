@@ -18,6 +18,7 @@ pub mod signal;
 pub mod slack;
 pub mod teams;
 pub mod telegram;
+pub mod singularix;
 pub mod twitch;
 pub mod types;
 pub mod whatsapp;
