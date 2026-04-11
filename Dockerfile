@@ -4,7 +4,8 @@
 FROM rust:1-slim-bookworm AS chef
 RUN apt-get update && apt-get install -y \
     pkg-config libssl-dev \
-    libglib2.0-dev \
+    libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev \
+    libpango1.0-dev libcairo2-dev libatk1.0-dev \
     && rm -rf /var/lib/apt/lists/*
 RUN cargo install cargo-chef --locked
 WORKDIR /build
@@ -21,12 +22,10 @@ RUN cargo chef prepare --recipe-path recipe.json
 # ── Stage 3: Cook dependencies (CACHED between deploys) ─────────────────────
 FROM chef AS builder
 COPY --from=planner /build/recipe.json recipe.json
-# Build args for optional LTO/codegen tuning
 ARG LTO=true
 ARG CODEGEN_UNITS=1
 ENV CARGO_PROFILE_RELEASE_LTO=${LTO} \
     CARGO_PROFILE_RELEASE_CODEGEN_UNITS=${CODEGEN_UNITS}
-# This layer is cached as long as Cargo.toml/Cargo.lock don't change
 RUN cargo chef cook --release --recipe-path recipe.json
 
 # ── Stage 4: Build application (only YOUR code, ~30s) ───────────────────────
@@ -64,7 +63,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Chromium path for OpenFang browser.rs find_chromium()
 ENV CHROME_PATH=/usr/bin/chromium
 
 COPY --from=builder /build/target/release/openfang /usr/local/bin/
