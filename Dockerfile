@@ -4,8 +4,6 @@
 FROM rust:1-slim-bookworm AS chef
 RUN apt-get update && apt-get install -y \
     pkg-config libssl-dev \
-    libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev \
-    libpango1.0-dev libcairo2-dev libatk1.0-dev \
     && rm -rf /var/lib/apt/lists/*
 RUN cargo install cargo-chef --locked
 WORKDIR /build
@@ -17,6 +15,8 @@ COPY crates ./crates
 COPY xtask ./xtask
 COPY agents ./agents
 COPY packages ./packages
+# Exclude desktop crate (Tauri) — requires GTK/GDK/libsoup headers not needed for server
+RUN sed -i '/"crates\/openfang-desktop"/d' Cargo.toml
 RUN cargo chef prepare --recipe-path recipe.json
 
 # ── Stage 3: Cook dependencies (CACHED between deploys) ─────────────────────
@@ -34,6 +34,8 @@ COPY crates ./crates
 COPY xtask ./xtask
 COPY agents ./agents
 COPY packages ./packages
+# Same exclusion for the actual build
+RUN sed -i '/"crates\/openfang-desktop"/d' Cargo.toml
 RUN cargo build --release --bin openfang
 
 # ── Stage 5: Runtime image ──────────────────────────────────────────────────
@@ -60,7 +62,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcups2 \
     libxss1 \
     libgtk-3-0 \
-    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV CHROME_PATH=/usr/bin/chromium
