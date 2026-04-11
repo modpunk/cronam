@@ -61,7 +61,7 @@ WHEN TALKING TO THE USER:
 
 [[fallback_models]]
 provider = "anthropic"
-model = "claude-sonnet-4-20250514"
+model = "claude-sonnet-4-6"
 
 [resources]
 max_llm_tokens_per_hour = 500000
